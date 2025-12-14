@@ -1,3 +1,6 @@
+
+--Creating consensus tables before changing them after writing queries
+
 -- ==============================================
 -- Kitchen Schema (simple version for ERD generator)
 -- ==============================================
@@ -11,6 +14,10 @@ CREATE TABLE Ingredient
   allergen_flag VARCHAR(3) CHECK (allergen_flag IN ('YES','NO')),
   PRIMARY KEY (ingredient_id)
 );
+
+ALTER TABLE Ingredient
+ADD COLUMN cost_per_unit NUMERIC(10,2) CHECK (cost_per_unit > 0);
+
 
 -- 2) Batch (Inventory lot of Ingredient)
 CREATE TABLE Batch
@@ -118,9 +125,17 @@ CREATE TABLE Production
   FOREIGN KEY (leader_employee_id) REFERENCES Employee(employee_id)
 );
 
+ALTER TABLE Production
+ADD COLUMN shift_id INT;
+
+
 ALTER TABLE Recipe
 ADD CONSTRAINT uq_recipe_product_version UNIQUE (product_id, version_no);
 
 ALTER TABLE Assignment
 ADD CONSTRAINT uq_assignment_unique
 UNIQUE (employee_id, shift_id, station_id, task_name);
+
+
+
+
