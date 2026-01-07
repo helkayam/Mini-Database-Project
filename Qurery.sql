@@ -12,6 +12,20 @@ ON a.shift_id=Tproduction.shift_id AND a.station_id=Tproduction.station_id
 JOIN Employee e
 ON e.employee_id=a.employee_id
 
+--Post-integration optimized query
+--1)
+WITH above_prod AS (
+  SELECT shift_id, station_id
+  FROM public.production
+  WHERE quantity_output > (SELECT AVG(quantity_output) FROM public.production)
+)
+SELECT DISTINCT e.first_name, e.last_name, e.role
+FROM above_prod p
+JOIN public.assignment a
+  ON a.shift_id = p.shift_id
+ AND a.station_id = p.station_id
+JOIN public.employees e
+  ON e.employee_id = a.employee_id;
 
 
 -- 2) Inventory usage report
@@ -81,6 +95,25 @@ GROUP BY p.product_id, p.name, p.price
 ORDER BY profit_per_unit DESC;
 
 
+--Post-integration optimized query
+--4)
+SELECT 
+    p.product_id,
+    p.name AS product_name,
+    p.price AS sell_price,
+    ROUND(SUM(ri.quantity * i.cost_per_unit) / r.yield_units,2) AS cost_per_unit,
+    ROUND(p.price - SUM(ri.quantity * i.cost_per_unit) / r.yield_units,2) AS profit_per_unit,
+    ROUND(((p.price - SUM(ri.quantity * i.cost_per_unit) / r.yield_units) / p.price) * 100, 2)
+      AS profit_margin_percent
+FROM public.product p
+JOIN public.recipe r 
+  ON r.product_id = p.product_id
+JOIN public.recipeitem ri 
+  ON ri.recipe_id = r.recipe_id
+JOIN public.ingredient i
+  ON i.ingredient_id = ri.ingredient_id
+GROUP BY p.product_id, p.name, p.price, r.yield_units
+ORDER BY profit_per_unit DESC;
 
 
 
@@ -133,13 +166,21 @@ Limit 10;
 --2)The average hourly output for each station id in each shift id
 SELECT 
     st.station_id,
-    SUM(p.quantity_output)/(ABS(s.start_hour-s.end_hour)) AS avg_output_per_hour
-FROM production p
-JOIN Shift s
-ON p.shift_id = s.shift_id
-JOIN Station st
-ON p.station_id = st.station_id
-GROUP BY st.station_id
+    s.shift_id,
+    SUM(p.quantity_output) 
+      / ABS(s.end_hour - s.start_hour) AS avg_output_per_hour
+FROM public.production p
+JOIN public.shift s
+  ON p.shift_id = s.shift_id
+JOIN public.station st
+  ON p.station_id = st.station_id
+GROUP BY 
+    st.station_id,
+    s.shift_id,
+    s.start_hour,
+    s.end_hour
+ORDER BY st.station_id, s.shift_id;
+
 
 
 -- 3) The total amount of output produced at each station,
@@ -147,7 +188,7 @@ GROUP BY st.station_id
 SELECT
     s.name AS station_name,
     e.role AS leader_role,
-    SUM(p.quantity_output) AS total_output_units
+    ROUND(SUM(p.quantity_output)) AS total_output_units
 FROM 
     production p
 JOIN 
