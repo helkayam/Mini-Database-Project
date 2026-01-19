@@ -32,32 +32,36 @@ JOIN public.employees e
 SELECT 
     IU.ingredient_id,
     IU.ingredient_name,
-    IU.used_amount,
-    ISK.total_quantity,
-    (ISK.total_quantity - IU.used_amount) AS remaining_quantity
+    ROUND(IU.used_amount, 2) AS used_amount,
+    COALESCE(ISK.total_quantity, 0) AS total_quantity,
+    ROUND(COALESCE(ISK.total_quantity, 0) - IU.used_amount, 2) AS remaining_quantity,
+    -- בדיקה אם חסר במלאי או אם המלאי נמוך
+    CASE 
+        WHEN (COALESCE(ISK.total_quantity, 0) - IU.used_amount) < 0 THEN 'Missing Stock'
+        WHEN (COALESCE(ISK.total_quantity, 0) - IU.used_amount) < 100 THEN 'Low Stock'
+        ELSE 'OK'
+    END AS inventory_status
 FROM (
-    -- שימוש אמיתי בחומרי גלם לפי כל ההפקות
+    -- חישוב כמה השתמשנו בכל חומר גלם לפי ההפקות (Production)
     SELECT 
         ri.ingredient_id,
         i.name AS ingredient_name,
         SUM(ri.quantity * p.quantity_output) AS used_amount
     FROM Production p
-    JOIN RecipeItem ri
-      ON p.recipe_id = ri.recipe_id
-    JOIN Ingredient i
-      ON ri.ingredient_id = i.ingredient_id
+    JOIN RecipeItem ri ON p.recipe_id = ri.recipe_id
+    JOIN Ingredient i ON ri.ingredient_id = i.ingredient_id
     GROUP BY ri.ingredient_id, i.name
 ) AS IU
 LEFT JOIN (
-    -- כמה יש במלאי מתוך באצ'ים
+    -- חישוב כמה מלאי זמין יש כרגע בבאצ'ים
     SELECT 
-        ingredient_id,
+        ingredient_id, 
         SUM(quantity_current) AS total_quantity
     FROM Batch
     GROUP BY ingredient_id
-) AS ISK
-  ON IU.ingredient_id = ISK.ingredient_id
-ORDER BY IU.used_amount DESC;
+) AS ISK ON IU.ingredient_id = ISK.ingredient_id
+-- סידור לפי הכמות שנשארה (כדי לראות קודם את מה שחסר)
+ORDER BY remaining_quantity ASC;
 
 
 -- 3) Station revenue report
@@ -101,18 +105,22 @@ SELECT
     p.product_id,
     p.name AS product_name,
     p.price AS sell_price,
-    ROUND(SUM(ri.quantity * i.cost_per_unit) / r.yield_units,2) AS cost_per_unit,
-    ROUND(p.price - SUM(ri.quantity * i.cost_per_unit) / r.yield_units,2) AS profit_per_unit,
-    ROUND(((p.price - SUM(ri.quantity * i.cost_per_unit) / r.yield_units) / p.price) * 100, 2)
+    -- חישוב עלות ליחידה אחת לפי הגרסה האחרונה של המתכון
+    ROUND(SUM(ri.quantity * i.cost_per_unit) / lvr.yield_units, 2) AS cost_per_unit,
+    -- חישוב רווח בשקלים
+    ROUND(p.price - (SUM(ri.quantity * i.cost_per_unit) / lvr.yield_units), 2) AS profit_per_unit,
+    -- חישוב אחוז הרווח (מרג'ין)
+    ROUND(((p.price - (SUM(ri.quantity * i.cost_per_unit) / lvr.yield_units)) / p.price) * 100, 2) 
       AS profit_margin_percent
 FROM public.product p
-JOIN public.recipe r 
-  ON r.product_id = p.product_id
+-- שימוש ב-VIEW שמחזיר רק את הגרסה האחרונה של כל מתכון
+JOIN public.lastversionrecipeproduct lvr 
+  ON p.product_id = lvr.product_id
 JOIN public.recipeitem ri 
-  ON ri.recipe_id = r.recipe_id
+  ON lvr.recipe_id = ri.recipe_id
 JOIN public.ingredient i
   ON i.ingredient_id = ri.ingredient_id
-GROUP BY p.product_id, p.name, p.price, r.yield_units
+GROUP BY p.product_id, p.name, p.price, lvr.yield_units
 ORDER BY profit_per_unit DESC;
 
 
@@ -202,6 +210,24 @@ ORDER BY
     s.name,
     total_output_units DESC;
 
+
+-- Post-integration optimized query
+SELECT
+    s.name AS station_name,
+    e.role AS leader_role,
+    ROUND(SUM(p.quantity_output)) AS total_output_units
+FROM 
+    production p
+JOIN 
+    station s ON p.station_id = s.station_id
+JOIN 
+    employees e ON p.leader_employee_id = e.employee_id
+GROUP BY
+    s.name,
+    e.role
+ORDER BY
+    s.name,
+    total_output_units DESC;
 
 
 

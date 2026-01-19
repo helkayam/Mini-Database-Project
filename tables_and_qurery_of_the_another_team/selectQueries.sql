@@ -173,7 +173,7 @@ ORDER BY total_bonus DESC #ממיין את העובדים לפי הבונוס מ
 LIMIT 3; #לוקח רק ה3 הראשונים
 
 ---Post-integration optimized query
---7)
+--)
 SELECT 
     e.employee_id,
     CONCAT(e.first_name, ' ', e.last_name) AS full_name,
