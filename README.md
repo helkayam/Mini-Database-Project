@@ -1,2 +1,2 @@
 # Mini-Database-Project
-[📜 דוח מיניפ בבסנת.pdf](https://github.com/user-attachments/files/24471105/default.pdf)
+https://docs.google.com/document/d/14v9-CpLOJKzjAFWtsofPrSddgt-QLxyVV5y_RvnvgoM/edit?usp=sharing
