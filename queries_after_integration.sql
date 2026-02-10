@@ -44,7 +44,7 @@ ORDER BY sh.shift_date DESC, e.last_name;
 
 
 -- 2)The query produces a per-shift profitability summary, showing each shift’s date alongside its total revenue, total labor cost, and net profit
--- to clearly indicate which shifts were profitable and by how much.
+-- to clearly indicate which sצhifts were profitable and by how much.
 SELECT
     s.shift_id,
     s.shift_date,
@@ -53,28 +53,25 @@ SELECT
     ROUND(COALESCE(r.total_revenue, 0) - COALESCE(l.total_labor_cost, 0), 2) AS profit
 FROM shift s
 LEFT JOIN (
+    -- הכנסות לפי משמרת
     SELECT
         pr.shift_id,
         SUM(pr.quantity_output * p.price) AS total_revenue
     FROM production pr
-    JOIN product p
-        ON p.product_id = pr.product_id
+    JOIN product p ON p.product_id = pr.product_id
     GROUP BY pr.shift_id
-) r
-    ON r.shift_id = s.shift_id
+) r ON r.shift_id = s.shift_id
 LEFT JOIN (
+    -- עלות עבודה לפי משמרת (מתוקן מ-work_date ל-shift_id)
     SELECT
-        a.work_date,
+        a.shift_id,
         SUM(a.hours_worked * j.base_salary) AS total_labor_cost
     FROM attendance a
-    JOIN employees e
-        ON e.employee_id = a.employee_id
-    JOIN jobs j
-        ON j.job_id = e.job_id
-    GROUP BY a.work_date
-) l
-    ON l.work_date = s.shift_date
-ORDER BY s.shift_date;
+    JOIN employees e ON e.employee_id = a.employee_id
+    JOIN jobs j ON j.job_id = e.job_id
+    GROUP BY a.shift_id
+) l ON l.shift_id = s.shift_id
+ORDER BY s.shift_date, s.shift_id;
 
 -- 3) The query outputs an employee productivity ranking, presenting each employee’s total production, total worked hours, and calculated output per hour,
 -- making it easy to identify the most and least efficient workers.
@@ -230,9 +227,3 @@ LEFT JOIN (
     ON asg_prod.employee_id = e.employee_id
 ORDER BY b.total_bonus_this_year DESC
 LIMIT 3;
-
-
-
-
-
-
